@@ -87,6 +87,8 @@ const ChatArea: React.FC<{ id?: string }> = ({ id }) => {
 
   const scrollArea = useRef<HTMLDivElement>(null);
 
+  const authKey = useRef<string>(null);
+
   const scroll2bottom = (idx?: number) => {
     let all = scrollArea.current?.getElementsByTagName('br')!;
     all[idx || all.length - 1].scrollIntoView({
@@ -101,12 +103,16 @@ const ChatArea: React.FC<{ id?: string }> = ({ id }) => {
   }
 
   async function* getResponse(ctx: aiContext[]) {
+    if(authKey.current === null)
+    {
+        return;
+    }
     let r = await fetch(
       "https://open.bigmodel.cn/api/paas/v4/chat/completions",
       {
         method: "POST",
         headers: {
-          "Authorization": "2bfd0fafc21fe17416187209f6e567a2.95ZNhikNEAOUQaUk",
+          "Authorization": authKey.current,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
