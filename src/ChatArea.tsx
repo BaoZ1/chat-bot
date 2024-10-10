@@ -11,6 +11,7 @@ import {
 } from "@ant-design/icons"
 import { exists, mkdir, readTextFile, writeTextFile, BaseDirectory } from '@tauri-apps/plugin-fs';
 import { useFloating, offset, autoUpdate, inline, autoPlacement } from '@floating-ui/react';
+import { type settingStruct } from './SettingList';
 
 const { TextArea } = Input;
 const { Title, Paragraph } = Typography;
@@ -58,7 +59,8 @@ const prompts = {
 }
 
 const ChatArea: React.FC<{ id?: string }> = ({ id }) => {
-  id = id || generateID();
+  const chatId = useRef(id || generateID());
+  const authKey = useRef<string | null>(null);
 
   const [title, setTitle] = useState("Untitled");
   const [text, setText] = useState("");
@@ -87,8 +89,6 @@ const ChatArea: React.FC<{ id?: string }> = ({ id }) => {
 
   const scrollArea = useRef<HTMLDivElement>(null);
 
-  const authKey = useRef<string>(null);
-
   const scroll2bottom = (idx?: number) => {
     let all = scrollArea.current?.getElementsByTagName('br')!;
     all[idx || all.length - 1].scrollIntoView({
@@ -96,16 +96,16 @@ const ChatArea: React.FC<{ id?: string }> = ({ id }) => {
       block: 'nearest',
       inline: 'center'
     });
-  }
+  };
 
   const convertContext = (hst: chatHistory[]) => {
     return hst.map(({ role, content }) => ({ role, content } as aiContext))
-  }
+  };
 
   async function* getResponse(ctx: aiContext[]) {
-    if(authKey.current === null)
-    {
-        return;
+    if (authKey.current === null) {
+      yield "need auth key";
+      return;
     }
     let r = await fetch(
       "https://open.bigmodel.cn/api/paas/v4/chat/completions",
@@ -140,7 +140,7 @@ const ChatArea: React.FC<{ id?: string }> = ({ id }) => {
         }
       }
     }
-  }
+  };
 
   const getReply = async () => {
     let newHistory = [...history, { role: 'user', content: text } as chatHistory];
@@ -156,7 +156,7 @@ const ChatArea: React.FC<{ id?: string }> = ({ id }) => {
     }
     scroll2bottom();
     setSendable(true);
-  }
+  };
 
   const translate = async (idx: number) => {
     let target = history[idx];
@@ -175,7 +175,7 @@ const ChatArea: React.FC<{ id?: string }> = ({ id }) => {
       scroll2bottom(idx);
     }
     scroll2bottom(idx);
-  }
+  };
 
   const polish = async () => {
     setPolishResult('');
@@ -190,7 +190,7 @@ const ChatArea: React.FC<{ id?: string }> = ({ id }) => {
         return prev + value;
       });
     }
-  }
+  };
 
   const explain = async () => {
     setShowExplainBtn(false);
@@ -207,7 +207,7 @@ const ChatArea: React.FC<{ id?: string }> = ({ id }) => {
         return prev + value;
       });
     }
-  }
+  };
 
   const correct = async (idx: number) => {
     let target = history[idx];
@@ -226,7 +226,7 @@ const ChatArea: React.FC<{ id?: string }> = ({ id }) => {
       scroll2bottom(idx);
     }
     scroll2bottom(idx);
-  }
+  };
 
   const handleSelect = () => {
     setShowExplainArea(false);
@@ -241,16 +241,16 @@ const ChatArea: React.FC<{ id?: string }> = ({ id }) => {
       getClientRects: () => range.getClientRects(),
     })
     setShowExplainBtn(true);
-  }
+  };
 
   const loadHistory = async () => {
-    if (await exists(`saves/${id}.json`, { baseDir: BaseDirectory.AppLocalData })) {
-      let raw = await readTextFile(`saves/${id}.json`, { baseDir: BaseDirectory.AppLocalData });
+    if (await exists(`saves/${chatId.current}.json`, { baseDir: BaseDirectory.AppLocalData })) {
+      let raw = await readTextFile(`saves/${chatId.current}.json`, { baseDir: BaseDirectory.AppLocalData });
       let data: saveStruct = JSON.parse(raw);
       setTitle(data.title);
       setHistory(data.history);
     }
-  }
+  };
 
   const saveHistory = async () => {
     let toSave: saveStruct = {
@@ -263,20 +263,31 @@ const ChatArea: React.FC<{ id?: string }> = ({ id }) => {
     if (title === "Untitled" && history.length === 0) {
       return;
     }
-    await writeTextFile(`saves/${id}.json`, JSON.stringify(toSave), { baseDir: BaseDirectory.AppLocalData });
-  }
+    await writeTextFile(`saves/${chatId}.json`, JSON.stringify(toSave), { baseDir: BaseDirectory.AppLocalData });
+  };
+
+  useEffect(() => {
+    (async () => {
+      if (! await exists(`settings.json`, { baseDir: BaseDirectory.AppLocalData })) {
+        await writeTextFile(`settings.json`, "{}", { baseDir: BaseDirectory.AppLocalData });
+      }
+      let raw = await readTextFile(`settings.json`, { baseDir: BaseDirectory.AppLocalData });
+      let setting: settingStruct = JSON.parse(raw);
+      authKey.current = setting.authKey || null;
+    })();
+  }, []);
 
   useEffect(() => {
     loadHistory();
     return () => { saveHistory() }
-  }, [])
+  }, []);
 
   useEffect(() => {
     document.addEventListener("selectionchange", handleSelect);
     return () => {
       document.removeEventListener("selectionchange", handleSelect);
     }
-  }, [])
+  }, []);
 
   return (
     <Flex vertical justify='space-between' css={css`
